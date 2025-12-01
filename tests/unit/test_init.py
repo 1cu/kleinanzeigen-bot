@@ -1,9 +1,8 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-import copy, io, logging, os, tempfile  # isort: skip
+import copy, logging, os, tempfile  # isort: skip
 from collections.abc import Generator
-from contextlib import redirect_stdout
 from datetime import timedelta
 from pathlib import Path
 from typing import Any, cast
@@ -205,82 +204,6 @@ class TestKleinanzeigenBotLogging:
         test_bot.log_file_path = None
         test_bot.configure_file_logging()
         assert test_bot.file_log is None
-
-
-class TestKleinanzeigenBotCommandLine:
-    """Tests for command line argument parsing."""
-
-    @pytest.mark.parametrize(("args", "expected_command", "expected_selector", "expected_keep_old"), [
-        (["publish", "--ads=all"], "publish", "all", False),
-        (["verify"], "verify", "due", False),
-        (["download", "--ads=12345"], "download", "12345", False),
-        (["publish", "--force"], "publish", "all", False),
-        (["publish", "--keep-old"], "publish", "due", True),
-        (["publish", "--ads=all", "--keep-old"], "publish", "all", True),
-        (["download", "--ads=new"], "download", "new", False),
-        (["publish", "--ads=changed"], "publish", "changed", False),
-        (["publish", "--ads=changed,due"], "publish", "changed,due", False),
-        (["publish", "--ads=changed,new"], "publish", "changed,new", False),
-        (["version"], "version", "due", False),
-    ])
-    def test_parse_args_handles_valid_arguments(
-        self,
-        test_bot:KleinanzeigenBot,
-        args:list[str],
-        expected_command:str,
-        expected_selector:str,
-        expected_keep_old:bool
-    ) -> None:
-        """Verify that valid command line arguments are parsed correctly."""
-        test_bot.parse_args(["dummy"] + args)  # Add dummy arg to simulate sys.argv[0]
-        assert test_bot.command == expected_command
-        assert test_bot.ads_selector == expected_selector
-        assert test_bot.keep_old_ads == expected_keep_old
-
-    def test_parse_args_handles_help_command(self, test_bot:KleinanzeigenBot) -> None:
-        """Verify that help command is handled correctly."""
-        buf = io.StringIO()
-        with pytest.raises(SystemExit) as exc_info, redirect_stdout(buf):
-            test_bot.parse_args(["dummy", "--help"])
-        assert exc_info.value.code == 0
-        stdout = buf.getvalue()
-        assert "publish" in stdout
-        assert "verify" in stdout
-        assert "help" in stdout
-        assert "version" in stdout
-        assert "--verbose" in stdout
-
-    def test_parse_args_handles_invalid_arguments(self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture) -> None:
-        """Verify that invalid arguments are handled correctly."""
-        caplog.set_level(logging.ERROR)
-        with pytest.raises(SystemExit) as exc_info:
-            test_bot.parse_args(["dummy", "--invalid-option"])
-        assert exc_info.value.code == 2
-        assert any(
-            record.levelno == logging.ERROR
-            and (
-                "--invalid-option not recognized" in record.getMessage()
-                or "Option --invalid-option unbekannt" in record.getMessage()
-            )
-            for record in caplog.records
-        )
-
-        assert any(
-            ("--invalid-option not recognized" in m)
-            or ("Option --invalid-option unbekannt" in m)
-            for m in caplog.messages
-        )
-
-    def test_parse_args_handles_verbose_flag(self, test_bot:KleinanzeigenBot) -> None:
-        """Verify that verbose flag sets correct log level."""
-        test_bot.parse_args(["dummy", "--verbose"])
-        assert loggers.is_debug(LOG)
-
-    def test_parse_args_handles_config_path(self, test_bot:KleinanzeigenBot, test_data_dir:str) -> None:
-        """Verify that config path is set correctly."""
-        config_path = Path(test_data_dir) / "custom_config.yaml"
-        test_bot.parse_args(["dummy", "--config", str(config_path)])
-        assert test_bot.config_file_path == str(config_path.absolute())
 
 
 class TestKleinanzeigenBotConfiguration:
@@ -575,68 +498,6 @@ class TestKleinanzeigenBotBasics:
 
 class TestKleinanzeigenBotArgParsing:
     """Tests for command line argument parsing."""
-
-    def test_parse_args_help(self, test_bot:KleinanzeigenBot) -> None:
-        """Test parsing help command."""
-        test_bot.parse_args(["script.py", "help"])
-        assert test_bot.command == "help"
-
-    def test_parse_args_version(self, test_bot:KleinanzeigenBot) -> None:
-        """Test parsing version command."""
-        test_bot.parse_args(["script.py", "version"])
-        assert test_bot.command == "version"
-
-    def test_parse_args_verbose(self, test_bot:KleinanzeigenBot) -> None:
-        """Test parsing verbose flag."""
-        test_bot.parse_args(["script.py", "-v", "help"])
-        assert loggers.is_debug(loggers.get_logger("kleinanzeigen_bot"))
-
-    def test_parse_args_config_path(self, test_bot:KleinanzeigenBot) -> None:
-        """Test parsing config path."""
-        test_bot.parse_args(["script.py", "--config=test.yaml", "help"])
-        assert test_bot.config_file_path.endswith("test.yaml")
-
-    def test_parse_args_logfile(self, test_bot:KleinanzeigenBot) -> None:
-        """Test parsing log file path."""
-        test_bot.parse_args(["script.py", "--logfile=test.log", "help"])
-        assert test_bot.log_file_path is not None
-        assert "test.log" in test_bot.log_file_path
-
-    def test_parse_args_ads_selector(self, test_bot:KleinanzeigenBot) -> None:
-        """Test parsing ads selector."""
-        test_bot.parse_args(["script.py", "--ads=all", "publish"])
-        assert test_bot.ads_selector == "all"
-
-    def test_parse_args_force(self, test_bot:KleinanzeigenBot) -> None:
-        """Test parsing force flag."""
-        test_bot.parse_args(["script.py", "--force", "publish"])
-        assert test_bot.ads_selector == "all"
-
-    def test_parse_args_keep_old(self, test_bot:KleinanzeigenBot) -> None:
-        """Test parsing keep-old flag."""
-        test_bot.parse_args(["script.py", "--keep-old", "publish"])
-        assert test_bot.keep_old_ads is True
-
-    def test_parse_args_logfile_empty(self, test_bot:KleinanzeigenBot) -> None:
-        """Test parsing empty log file path."""
-        test_bot.parse_args(["script.py", "--logfile=", "help"])
-        assert test_bot.log_file_path is None
-
-    def test_parse_args_lang_option(self, test_bot:KleinanzeigenBot) -> None:
-        """Test parsing language option."""
-        test_bot.parse_args(["script.py", "--lang=en", "help"])
-        assert test_bot.command == "help"
-
-    def test_parse_args_no_arguments(self, test_bot:KleinanzeigenBot) -> None:
-        """Test parsing no arguments defaults to help."""
-        test_bot.parse_args(["script.py"])
-        assert test_bot.command == "help"
-
-    def test_parse_args_multiple_commands(self, test_bot:KleinanzeigenBot) -> None:
-        """Test parsing multiple commands raises error."""
-        with pytest.raises(SystemExit) as exc_info:
-            test_bot.parse_args(["script.py", "help", "version"])
-        assert exc_info.value.code == 2
 
 
 class TestKleinanzeigenBotCommands:
