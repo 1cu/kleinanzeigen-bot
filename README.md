@@ -21,6 +21,7 @@
 1. [License](#license)
 
 For details on the new smoke test strategy and contributor guidance, see [TESTING.md](./docs/TESTING.md).
+If anything in the documentation looks outdated, please open an issue or PR.
 
 ## <a name="about"></a>About
 
